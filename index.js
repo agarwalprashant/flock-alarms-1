@@ -3,7 +3,7 @@ var flock = require('flockos');
 var express = require('express');
 var store = require('./store.js');
 var chrono = require('chrono-node');
-// var Mustache = require('mustache');
+var Mustache = require('mustache');
 var fs = require('fs');
 var util = require('util');
 
@@ -70,9 +70,93 @@ var scheduleAlarm = function (alarm) {
 store.allAlarms().forEach(scheduleAlarm);
 
 var sendAlarm = function (alarm) {
-	console.log("prashant");
-    flock.chat.sendMessage(config.botToken, {	
+    flock.chat.sendMessage(config.botToken, {
         to: alarm.userId,
         text: alarm.text
     });
 };
+
+var listTemplate = fs.readFileSync('list.mustache.html', 'utf8');
+app.get('/list', function (req, res) {
+    var event = JSON.parse(req.query.flockEvent);
+    // var alarms = store.userAlarms(event.userId).map(function (alarm) {
+    //     return {
+    //         text: alarm.text,
+    //         timeString: new Date(alarm.time).toLocaleString()
+    //     }
+    // });
+    res.set('Content-Type', 'text/html');
+    var body = "<h1>This is list of frequently asked questions</h1><h2>question 1: where can we fill form 10";
+    // var body = Mustache.render(listTemplate, { alarms: alarms });
+
+res.send('<html>\
+    <head>\
+<script src="https://apps-static.flock.co/js-sdk/0.1.0/flock.js"></script>    </head>\
+    <body>\
+        <button onclick="myFunction()">Click me</button>\
+    </body>\
+    <script>\
+function myFunction() {\
+	var url="https://6dadaec6.ngrok.io/prashant";\
+	var string="modal";\
+	flock.openWidget(url, string)\
+}\
+</script>\
+</html>');
+
+
+    // res.send(body);
+});
+
+
+app.get('/prashant',function(req,res){
+	res.send("hi prashant");
+});
+
+flock.events.on('client.messageAction', function (event, callback) {
+    var messages = event.messages;
+    if (!(messages && messages.length > 0)) {
+        console.log('chat', event.chat);
+        console.log('uids', event.messageUids);
+        console.log('token', store.getToken(event.userId));
+        flock.chat.fetchMessages(store.getToken(event.userId), {
+            chat: event.chat,
+            uids: event.messageUids
+        }, function (error, messages) {
+            if (error) {
+                console.warn('Got error');
+                callback(error);
+            } else {
+                setAlarms(messages);
+            }
+        });
+    } else {
+        setAlarms(messages);
+    }
+    var setAlarms = function (messages) {
+        var alarms = messages.map(function (message) {
+            var parsed = parseDate(message.text);
+            if (parsed) {
+                return {
+                    userId: event.userId,
+                    time: parsed.date.getTime(),
+                    text: util.format('In %s: %s', event.chatName, message.text)
+                }
+            } else {
+                return null;
+            }
+        }).filter(function (alarm) {
+            return alarm !== null;
+        });
+        if (alarms.length > 0) {
+            alarms.forEach(addAlarm);
+            callback(null, { text: util.format('%d alarm(s) added', alarms.length) });
+        } else {
+            callback(null, { text: 'No alarms found' });
+        }
+    };
+});
+
+
+
+
